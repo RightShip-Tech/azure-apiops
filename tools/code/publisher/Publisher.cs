@@ -99,16 +99,16 @@ internal class Publisher : BackgroundService
         logger.LogInformation("Getting files from commit ID {commitId}...", commitId);
         var fileDictionary = await GetCommitIdFiles(commitId);
 
-        if (fileDictionary.TryGetValue(Action.Delete, out var deletedFiles) && deletedFiles.Any())
-        {
-            logger.LogInformation("Processing files deleted in commit ID...");
-            await ProcessDeletedCommitIdFiles(deletedFiles, cancellationToken);
-        }
-
         if (fileDictionary.TryGetValue(Action.Put, out var putFiles) && putFiles.Any())
         {
             logger.LogInformation("Processing modified files in commit ID...");
             await ProcessCommitIdFilesToPut(putFiles, cancellationToken);
+        }
+
+        if (fileDictionary.TryGetValue(Action.Delete, out var deletedFiles) && deletedFiles.Any())
+        {
+            logger.LogInformation("Processing files deleted in commit ID...");
+            await ProcessDeletedCommitIdFiles(deletedFiles, cancellationToken);
         }
     }
 
