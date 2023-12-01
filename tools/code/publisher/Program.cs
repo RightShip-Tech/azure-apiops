@@ -179,7 +179,8 @@ public static class Program
         return new Publisher.Parameters
         {
             ApplicationLifetime = provider.GetRequiredService<IHostApplicationLifetime>(),
-            CommitId = TryGetCommitId(configuration),
+            FromCommitId = TryGetFromCommitId(configuration),
+            ToCommitId = TryGetToCommitId(configuration),
             ConfigurationFile = TryGetConfigurationFile(configuration),
             ConfigurationJson = GetConfigurationJson(configuration),
             DeleteRestResource = provider.GetRequiredService<DeleteRestResource>(),
@@ -191,9 +192,18 @@ public static class Program
         };
     }
 
-    private static CommitId? TryGetCommitId(IConfiguration configuration)
+    private static CommitId? TryGetToCommitId(IConfiguration configuration)
     {
-        var commitId = configuration.TryGetValue("COMMIT_ID");
+        var commitId = configuration.TryGetValue("TO_COMMIT_ID");
+
+        return string.IsNullOrWhiteSpace(commitId)
+                ? null
+                : new CommitId(commitId);
+    }
+
+    private static CommitId? TryGetFromCommitId(IConfiguration configuration)
+    {
+        var commitId = configuration.TryGetValue("FROM_COMMIT_ID");
 
         return string.IsNullOrWhiteSpace(commitId)
                 ? null

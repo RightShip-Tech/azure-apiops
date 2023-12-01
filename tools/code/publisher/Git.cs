@@ -40,21 +40,21 @@ internal enum CommitStatus
 
 internal static class Git
 {
-    public static async ValueTask<ImmutableDictionary<CommitStatus, ImmutableList<FileInfo>>> GetFilesFromCommit(CommitId commitId, DirectoryInfo baseDirectory)
+    public static async ValueTask<ImmutableDictionary<CommitStatus, ImmutableList<FileInfo>>> GetFilesFromCommit(CommitId fromCommitId, CommitId toCommitId, DirectoryInfo baseDirectory)
     {
-        var diffTreeOutput = await GetDiffTreeOutput(commitId, baseDirectory);
+        var diffTreeOutput = await GetDiffTreeOutput(fromCommitId, toCommitId, baseDirectory);
 
         return ParseDiffTreeOutput(diffTreeOutput, baseDirectory);
     }
 
-    private static async ValueTask<string> GetDiffTreeOutput(CommitId commitId, DirectoryInfo baseDirectory)
+    private static async ValueTask<string> GetDiffTreeOutput(CommitId fromCommitId, CommitId toCommitId, DirectoryInfo baseDirectory)
     {
-        var command = Command.Run("git", "-C", baseDirectory.FullName, "diff-tree", "--no-commit-id", "--name-status", "--relative", "-r", $"{commitId}^", $"{commitId}");
+        var command = Command.Run("git", "-C", baseDirectory.FullName, "diff-tree", "--no-commit-id", "--name-status", "--relative", "-r", $"{fromCommitId}^", $"{toCommitId}");
         var commandResult = await command.Task;
 
         return commandResult.Success
             ? commandResult.StandardOutput
-            : throw new InvalidOperationException($"Failed to get files for commit {commitId} in directory {baseDirectory}. Error message is '{commandResult.StandardError}'.");
+            : throw new InvalidOperationException($"Failed to get files for commits {fromCommitId}-{toCommitId} in directory {baseDirectory}. Error message is '{commandResult.StandardError}'.");
     }
 
     private static ImmutableDictionary<CommitStatus, ImmutableList<FileInfo>> ParseDiffTreeOutput(string output, DirectoryInfo baseDirectory)

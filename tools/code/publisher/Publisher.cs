@@ -18,7 +18,8 @@ internal class Publisher : BackgroundService
     internal record Parameters
     {
         public required IHostApplicationLifetime ApplicationLifetime { get; init; }
-        public CommitId? CommitId { get; init; }
+        public CommitId? FromCommitId { get; init; }
+        public CommitId? ToCommitId { get; init; }
         public FileInfo? ConfigurationFile { get; init; }
         public required JsonObject ConfigurationJson { get; init; }
         public required DeleteRestResource DeleteRestResource { get; init; }
@@ -66,9 +67,9 @@ internal class Publisher : BackgroundService
 
     private async ValueTask Run(CancellationToken cancellationToken)
     {
-        await (publisherParameters.CommitId is null
+        await (publisherParameters.FromCommitId is null || publisherParameters.ToCommitId is null
                 ? RunWithoutCommitId(cancellationToken)
-                : RunWithCommitId(publisherParameters.CommitId, cancellationToken));
+                : RunWithCommitId(publisherParameters.FromCommitId, publisherParameters.ToCommitId, cancellationToken));
     }
 
     private async ValueTask RunWithoutCommitId(CancellationToken cancellationToken)
@@ -92,12 +93,12 @@ internal class Publisher : BackgroundService
                                             cancellationToken);
     }
 
-    private async ValueTask RunWithCommitId(CommitId commitId, CancellationToken cancellationToken)
+    private async ValueTask RunWithCommitId(CommitId fromCommitId, CommitId toCommitId, CancellationToken cancellationToken)
     {
         var logger = publisherParameters.Logger;
 
-        logger.LogInformation("Getting files from commit ID {commitId}...", commitId);
-        var fileDictionary = await GetCommitIdFiles(commitId);
+        logger.LogInformation("Getting files from commit IDs {fromCommitId}-{toCommitId}...", fromCommitId, toCommitId);
+        var fileDictionary = await GetCommitIdFiles(fromCommitId, toCommitId);
 
         if (fileDictionary.TryGetValue(Action.Put, out var putFiles) && putFiles.Any())
         {
@@ -112,10 +113,10 @@ internal class Publisher : BackgroundService
         }
     }
 
-    private async ValueTask<ImmutableDictionary<Action, ImmutableList<FileInfo>>> GetCommitIdFiles(CommitId commitId)
+    private async ValueTask<ImmutableDictionary<Action, ImmutableList<FileInfo>>> GetCommitIdFiles(CommitId fromCommitId, CommitId toCommitId)
     {
         var serviceDirectoryInfo = publisherParameters.ServiceDirectory.GetDirectoryInfo();
-        var commitDictionary = await Git.GetFilesFromCommit(commitId, serviceDirectoryInfo);
+        var commitDictionary = await Git.GetFilesFromCommit(fromCommitId, toCommitId, serviceDirectoryInfo);
 
         var fileActions = from kvp in commitDictionary
                           from fileAction in from file in kvp.Value
