@@ -25,6 +25,7 @@ internal class Publisher : BackgroundService
         public required DeleteRestResource DeleteRestResource { get; init; }
         public required ILogger Logger { get; init; }
         public required ListRestResources ListRestResources { get; init; }
+        public required GetRestResource GetRestResource { get; init; }
         public required PutRestResource PutRestResource { get; init; }
         public required ServiceDirectory ServiceDirectory { get; init; }
         public required ServiceUri ServiceUri { get; init; }
@@ -87,6 +88,7 @@ internal class Publisher : BackgroundService
                                             publisherParameters.ServiceDirectory,
                                             publisherParameters.ServiceUri,
                                             publisherParameters.ListRestResources,
+                                            publisherParameters.GetRestResource,
                                             publisherParameters.PutRestResource,
                                             publisherParameters.DeleteRestResource,
                                             logger,
@@ -142,6 +144,7 @@ internal class Publisher : BackgroundService
                                               publisherParameters.ServiceDirectory,
                                               publisherParameters.ServiceUri,
                                               publisherParameters.ListRestResources,
+                                              publisherParameters.GetRestResource,
                                               publisherParameters.PutRestResource,
                                               publisherParameters.DeleteRestResource,
                                               publisherParameters.Logger,
@@ -155,6 +158,7 @@ internal class Publisher : BackgroundService
                                             publisherParameters.ServiceDirectory,
                                             publisherParameters.ServiceUri,
                                             publisherParameters.ListRestResources,
+                                            publisherParameters.GetRestResource,
                                             publisherParameters.PutRestResource,
                                             publisherParameters.DeleteRestResource,
                                             publisherParameters.Logger,
