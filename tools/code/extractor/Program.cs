@@ -43,6 +43,13 @@ public static class Program
         {
             builder.AddYamlFile(yamlPath);
         };
+
+        var replaceValuesConfigurationPath = configuration.TryGetValue("REPLACE_VALUES_CONFIGURATION_JSON_PATH");
+
+        if (replaceValuesConfigurationPath is not null)
+        {
+            builder.AddJsonFile(replaceValuesConfigurationPath);
+        };
     }
 
     private static void ConfigureServices(IServiceCollection services)
@@ -182,6 +189,7 @@ public static class Program
 
         return new Extractor.Parameters
         {
+            ValuesToReplaceWithPlaceholders = GetValuesToReplaceWithPlaceholders(configuration),
             ApiNamesToExport = GetApiNamesToExport(configuration),
             LoggerNamesToExport = GetLoggerNamesToExport(configuration),
             DiagnosticNamesToExport = GetDiagnosticNamesToExport(configuration),
@@ -200,6 +208,12 @@ public static class Program
             ServiceDirectory = GetServiceDirectory(configuration),
             ServiceUri = GetServiceUri(configuration, armEnvironment)
         };
+    }
+
+    private static IEnumerable<PlaceholderValueModel>? GetValuesToReplaceWithPlaceholders(IConfiguration configuration)
+    {
+        var valuesToReplaceWithPlaceholdersSection = configuration.TryGetSection("valuesToReplaceWithPlaceholders");
+        return valuesToReplaceWithPlaceholdersSection?.Get<IEnumerable<PlaceholderValueModel>>();
     }
 
     private static IEnumerable<string>? GetApiNamesToExport(IConfiguration configuration)

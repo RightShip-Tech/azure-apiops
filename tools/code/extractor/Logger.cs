@@ -5,17 +5,18 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json.Nodes;
 
 namespace extractor;
 
 internal static class Logger
 {
-    public static async ValueTask ExportAll(ServiceDirectory serviceDirectory, ServiceUri serviceUri, ListRestResources listRestResources, GetRestResource getRestResource, ILogger logger, IEnumerable<string>? loggerNamesToExport, CancellationToken cancellationToken)
+    public static async ValueTask ExportAll(ServiceDirectory serviceDirectory, ServiceUri serviceUri, ListRestResources listRestResources, GetRestResource getRestResource, ILogger logger, IEnumerable<string>? loggerNamesToExport, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         await List(serviceUri, listRestResources, cancellationToken)
                 // Filter out apis that should not be exported
                 .Where(loggerName => ShouldExport(loggerName, loggerNamesToExport))
-                .ForEachParallel(async loggerName => await Export(serviceDirectory, serviceUri, loggerName, getRestResource, logger, cancellationToken),
+                .ForEachParallel(async loggerName => await Export(serviceDirectory, serviceUri, loggerName, getRestResource, logger, valuesToReplaceWithPlaceholders, cancellationToken),
                                  cancellationToken);
     }
 
@@ -38,7 +39,7 @@ internal static class Logger
                                                                                     StringComparison.OrdinalIgnoreCase));
     }
 
-    private static async ValueTask Export(ServiceDirectory serviceDirectory, ServiceUri serviceUri, LoggerName loggerName, GetRestResource getRestResource, ILogger logger, CancellationToken cancellationToken)
+    private static async ValueTask Export(ServiceDirectory serviceDirectory, ServiceUri serviceUri, LoggerName loggerName, GetRestResource getRestResource, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         var loggersDirectory = new LoggersDirectory(serviceDirectory);
         var loggerDirectory = new LoggerDirectory(loggerName, loggersDirectory);
@@ -46,18 +47,25 @@ internal static class Logger
         var loggersUri = new LoggersUri(serviceUri);
         var loggerUri = new LoggerUri(loggerName, loggersUri);
 
-        await ExportInformationFile(loggerDirectory, loggerUri, loggerName, getRestResource, logger, cancellationToken);
+        await ExportInformationFile(loggerDirectory, loggerUri, loggerName, getRestResource, logger, valuesToReplaceWithPlaceholders, cancellationToken);
     }
 
-    private static async ValueTask ExportInformationFile(LoggerDirectory loggerDirectory, LoggerUri loggerUri, LoggerName loggerName, GetRestResource getRestResource, ILogger logger, CancellationToken cancellationToken)
+    private static async ValueTask ExportInformationFile(LoggerDirectory loggerDirectory, LoggerUri loggerUri, LoggerName loggerName, GetRestResource getRestResource, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         var loggerInformationFile = new LoggerInformationFile(loggerDirectory);
 
         var responseJson = await getRestResource(loggerUri.Uri, cancellationToken);
         var loggerModel = LoggerModel.Deserialize(loggerName, responseJson);
         var contentJson = loggerModel.Serialize();
-
+        var contentJsonTxt = contentJson.ToJsonString();
+        if (valuesToReplaceWithPlaceholders != null)
+        {
+            foreach (var urlsToReplaceWithPlaceholder in valuesToReplaceWithPlaceholders)
+            {
+                contentJsonTxt = contentJsonTxt.Replace(urlsToReplaceWithPlaceholder.Value, urlsToReplaceWithPlaceholder.Placeholder);
+            }
+        }
         logger.LogInformation("Writing logger information file {filePath}...", loggerInformationFile.Path);
-        await loggerInformationFile.OverwriteWithJson(contentJson, cancellationToken);
+        await loggerInformationFile.OverwriteWithJson(JsonNode.Parse(contentJsonTxt), cancellationToken);
     }
 }

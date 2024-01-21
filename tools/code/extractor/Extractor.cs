@@ -29,6 +29,7 @@ internal class Extractor : BackgroundService
         public IEnumerable<string>? TagNamesToExport { get; init; }
         public IEnumerable<string>? SubscriptionNamesToExport { get; init; }
         public IEnumerable<string>? PolicyFragmentNamesToExport { get; init; }
+        public IEnumerable<PlaceholderValueModel>? ValuesToReplaceWithPlaceholders { get; init; }
     }
     
     private readonly Parameters parameters;
@@ -71,6 +72,7 @@ internal class Extractor : BackgroundService
         await Service.Export(parameters.ServiceDirectory,
                              parameters.ServiceUri,
                              parameters.DefaultApiSpecification,
+                             parameters.ValuesToReplaceWithPlaceholders,
                              parameters.ApiNamesToExport,
                              parameters.LoggerNamesToExport,
                              parameters.DiagnosticNamesToExport,

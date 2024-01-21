@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,12 +11,12 @@ namespace extractor;
 
 internal static class Backend
 {
-    public static async ValueTask ExportAll(ServiceDirectory serviceDirectory, ServiceUri serviceUri, ListRestResources listRestResources, GetRestResource getRestResource, ILogger logger, IEnumerable<string>? backendNamesToExport, CancellationToken cancellationToken)
+    public static async ValueTask ExportAll(ServiceDirectory serviceDirectory, ServiceUri serviceUri, ListRestResources listRestResources, GetRestResource getRestResource, ILogger logger, IEnumerable<string>? backendNamesToExport, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         await List(serviceUri, listRestResources, cancellationToken)
                 // Filter out tags that should not be exported
                 .Where(backendName => ShouldExport(backendName, backendNamesToExport))
-                .ForEachParallel(async backendName => await Export(serviceDirectory, serviceUri, backendName, getRestResource, logger, cancellationToken),
+                .ForEachParallel(async backendName => await Export(serviceDirectory, serviceUri, backendName, getRestResource, logger, valuesToReplaceWithPlaceholders, cancellationToken),
                                  cancellationToken);
     }
 
@@ -33,7 +34,7 @@ internal static class Backend
                || backendNamesToExport.Any(backendNameToExport => backendNameToExport.Equals(backendName.ToString(), StringComparison.OrdinalIgnoreCase));
     }
 
-    private static async ValueTask Export(ServiceDirectory serviceDirectory, ServiceUri serviceUri, BackendName backendName, GetRestResource getRestResource, ILogger logger, CancellationToken cancellationToken)
+    private static async ValueTask Export(ServiceDirectory serviceDirectory, ServiceUri serviceUri, BackendName backendName, GetRestResource getRestResource, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         var backendsDirectory = new BackendsDirectory(serviceDirectory);
         var backendDirectory = new BackendDirectory(backendName, backendsDirectory);
@@ -41,18 +42,26 @@ internal static class Backend
         var backendsUri = new BackendsUri(serviceUri);
         var backendUri = new BackendUri(backendName, backendsUri);
 
-        await ExportInformationFile(backendDirectory, backendUri, backendName, getRestResource, logger, cancellationToken);
+        await ExportInformationFile(backendDirectory, backendUri, backendName, getRestResource, logger, valuesToReplaceWithPlaceholders, cancellationToken);
     }
 
-    private static async ValueTask ExportInformationFile(BackendDirectory backendDirectory, BackendUri backendUri, BackendName backendName, GetRestResource getRestResource, ILogger logger, CancellationToken cancellationToken)
+    private static async ValueTask ExportInformationFile(BackendDirectory backendDirectory, BackendUri backendUri, BackendName backendName, GetRestResource getRestResource, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         var backendInformationFile = new BackendInformationFile(backendDirectory);
 
         var responseJson = await getRestResource(backendUri.Uri, cancellationToken);
         var backendModel = BackendModel.Deserialize(backendName, responseJson);
         var contentJson = backendModel.Serialize();
+        var contentJsonTxt = contentJson.ToJsonString();
+        if (valuesToReplaceWithPlaceholders != null)
+        {
+            foreach (var urlsToReplaceWithPlaceholder in valuesToReplaceWithPlaceholders)
+            {
+                contentJsonTxt = contentJsonTxt.Replace(urlsToReplaceWithPlaceholder.Value, urlsToReplaceWithPlaceholder.Placeholder);
+            }
+        }
 
         logger.LogInformation("Writing backend information file {filePath}...", backendInformationFile.Path);
-        await backendInformationFile.OverwriteWithJson(contentJson, cancellationToken);
+        await backendInformationFile.OverwriteWithJson(JsonNode.Parse(contentJsonTxt), cancellationToken);
     }
 }

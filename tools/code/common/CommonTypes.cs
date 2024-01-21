@@ -94,7 +94,7 @@ public static class ArtifactFileExtensions
         return file.GetFileInfo().OpenRead();
     }
 
-    public static async ValueTask OverwriteWithJson(this IArtifactFile file, JsonNode json, CancellationToken cancellationToken)
+    public static async ValueTask OverwriteWithJson(this IArtifactFile file, JsonNode? json, CancellationToken cancellationToken)
     {
         file.CreateDirectoryIfNotExists();
 

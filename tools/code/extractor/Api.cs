@@ -6,6 +6,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using YamlDotNet.Serialization;
@@ -15,7 +17,7 @@ namespace extractor;
 
 internal static class Api
 {
-    public static async ValueTask ExportAll(ServiceDirectory serviceDirectory, ServiceUri serviceUri, DefaultApiSpecification defaultSpecification, IEnumerable<string>? apiNamesToExport, ListRestResources listRestResources, GetRestResource getRestResource, DownloadResource downloadResource, ILogger logger, CancellationToken cancellationToken)
+    public static async ValueTask ExportAll(ServiceDirectory serviceDirectory, ServiceUri serviceUri, DefaultApiSpecification defaultSpecification, IEnumerable<string>? apiNamesToExport, ListRestResources listRestResources, GetRestResource getRestResource, DownloadResource downloadResource, ILogger logger,  IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         await List(serviceUri, listRestResources, cancellationToken)
                 // Filter out apis that should not be exported
@@ -29,7 +31,7 @@ internal static class Api
                 })
                 .GroupBy(api => api.Model.Properties.ApiVersionSetId)
                 // Export each group in parallel
-                .ForEachParallel(async group => await group.ForEachAwaitAsync(async api => await Export(serviceDirectory, serviceUri, api.Name, api.Model, defaultSpecification, listRestResources, getRestResource, downloadResource, logger, cancellationToken),
+                .ForEachParallel(async group => await group.ForEachAwaitAsync(async api => await Export(serviceDirectory, serviceUri, api.Name, api.Model, defaultSpecification, listRestResources, getRestResource, downloadResource, logger, valuesToReplaceWithPlaceholders, cancellationToken),
                                                                               cancellationToken),
                                  cancellationToken);
     }
@@ -63,7 +65,7 @@ internal static class Api
         return ApiModel.Deserialize(apiName, apiResponseJson);
     }
 
-    private static async ValueTask Export(ServiceDirectory serviceDirectory, ServiceUri serviceUri, ApiName apiName, ApiModel apiModel, DefaultApiSpecification defaultSpecification, ListRestResources listRestResources, GetRestResource getRestResource, DownloadResource downloadResource, ILogger logger, CancellationToken cancellationToken)
+    private static async ValueTask Export(ServiceDirectory serviceDirectory, ServiceUri serviceUri, ApiName apiName, ApiModel apiModel, DefaultApiSpecification defaultSpecification, ListRestResources listRestResources, GetRestResource getRestResource, DownloadResource downloadResource, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         var apisDirectory = new ApisDirectory(serviceDirectory);
         var apiDirectory = new ApiDirectory(apiName, apisDirectory);
@@ -71,31 +73,39 @@ internal static class Api
         var apisUri = new ApisUri(serviceUri);
         var apiUri = new ApiUri(apiName, apisUri);
 
-        await ExportInformationFile(apiModel, apiDirectory, logger, cancellationToken);
-        await ExportSpecification(apiModel, apiDirectory, apiUri, defaultSpecification, getRestResource, downloadResource, logger, cancellationToken);
+        await ExportInformationFile(apiModel, apiDirectory, logger, valuesToReplaceWithPlaceholders, cancellationToken);
+        await ExportSpecification(apiModel, apiDirectory, apiUri, defaultSpecification, getRestResource, downloadResource, logger, valuesToReplaceWithPlaceholders, cancellationToken);
         await ExportTags(apiDirectory, apiUri, listRestResources, logger, cancellationToken);
         await ExportPolicies(apiDirectory, apiUri, listRestResources, getRestResource, logger, cancellationToken);
         await ExportDiagnostics(apiDirectory, apiUri, listRestResources, getRestResource, logger, cancellationToken);
         await ExportOperations(apiDirectory, apiUri, listRestResources, getRestResource, logger, cancellationToken);
     }
 
-    private static async ValueTask ExportInformationFile(ApiModel apiModel, ApiDirectory apiDirectory, ILogger logger, CancellationToken cancellationToken)
+    private static async ValueTask ExportInformationFile(ApiModel apiModel, ApiDirectory apiDirectory, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         var apiInformationFile = new ApiInformationFile(apiDirectory);
         var contentJson = apiModel.Serialize();
+        string contentJsonTxt = contentJson.ToJsonString();
 
         logger.LogInformation("Writing API information file {filePath}...", apiInformationFile.Path);
-        await apiInformationFile.OverwriteWithJson(contentJson, cancellationToken);
+        if(valuesToReplaceWithPlaceholders != null)
+        {
+            foreach (var urlsToReplaceWithPlaceholder in valuesToReplaceWithPlaceholders)
+            {
+                contentJsonTxt = contentJsonTxt.Replace(urlsToReplaceWithPlaceholder.Value, urlsToReplaceWithPlaceholder.Placeholder);
+            }
+        }
+        await apiInformationFile.OverwriteWithJson(JsonNode.Parse(contentJsonTxt), cancellationToken);
     }
 
-    private static async ValueTask ExportSpecification(ApiModel apiModel, ApiDirectory apiDirectory, ApiUri apiUri, DefaultApiSpecification defaultSpecification, GetRestResource getRestResource, DownloadResource downloadResource, ILogger logger, CancellationToken cancellationToken)
+    private static async ValueTask ExportSpecification(ApiModel apiModel, ApiDirectory apiDirectory, ApiUri apiUri, DefaultApiSpecification defaultSpecification, GetRestResource getRestResource, DownloadResource downloadResource, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         await (apiModel.Properties.Type switch
         {
             var apiType when apiType == ApiTypeOption.GraphQl => ExportGraphQlSpecification(apiDirectory, apiUri, getRestResource, logger, cancellationToken),
             var apiType when apiType == ApiTypeOption.Soap => ExportWsdlSpecification(apiDirectory, apiUri, getRestResource, downloadResource, logger, cancellationToken),
             var apiType when apiType == ApiTypeOption.WebSocket => ValueTask.CompletedTask,
-            _ => ExportApiSpecification(apiDirectory, apiUri, defaultSpecification, getRestResource, downloadResource, logger, cancellationToken)
+            _ => ExportApiSpecification(apiDirectory, apiUri, defaultSpecification, getRestResource, downloadResource, logger, valuesToReplaceWithPlaceholders, cancellationToken)
         });
     }
 
@@ -140,7 +150,7 @@ internal static class Api
         return await downloadResource(downloadUri, cancellationToken);
     }
 
-    private static async ValueTask ExportApiSpecification(ApiDirectory apiDirectory, ApiUri apiUri, DefaultApiSpecification defaultSpecification, GetRestResource getRestResource, DownloadResource downloadResource, ILogger logger, CancellationToken cancellationToken)
+    private static async ValueTask ExportApiSpecification(ApiDirectory apiDirectory, ApiUri apiUri, DefaultApiSpecification defaultSpecification, GetRestResource getRestResource, DownloadResource downloadResource, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         ApiSpecificationFile specificationFile = defaultSpecification switch
         {
@@ -175,6 +185,23 @@ internal static class Api
                     await specificationFile.OverwriteWithBytes(bytes, cancellationToken);
                     break;
                 }
+            case DefaultApiSpecification.OpenApi openApi when openApi.Version is OpenApiSpecVersion.OpenApi3_0 && openApi.Format is OpenApiFormat.Json:
+                using (StreamReader reader = new StreamReader(downloadFileStream))
+                {
+                    var specificationText = await reader.ReadToEndAsync();
+                    if(valuesToReplaceWithPlaceholders != null)
+                    {
+                        foreach (var urlsToReplaceWithPlaceholder in valuesToReplaceWithPlaceholders)
+                        {
+                            specificationText = specificationText.Replace(urlsToReplaceWithPlaceholder.Value, urlsToReplaceWithPlaceholder.Placeholder);
+                        }
+                    }
+                    using(var memStream = new MemoryStream(Encoding.UTF8.GetBytes(specificationText)))
+                    {
+                        await specificationFile.OverwriteWithStream(memStream, cancellationToken);
+                    }
+                }
+                break;
             default:
                 await specificationFile.OverwriteWithStream(downloadFileStream, cancellationToken);
                 break;
