@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -9,10 +10,10 @@ namespace extractor;
 
 internal static class ApiDiagnostic
 {
-    public static async ValueTask ExportAll(ApiUri apiUri, ApiDirectory apiDirectory, ListRestResources listRestResources, GetRestResource getRestResource, ILogger logger, CancellationToken cancellationToken)
+    public static async ValueTask ExportAll(ApiUri apiUri, ApiDirectory apiDirectory, ListRestResources listRestResources, GetRestResource getRestResource, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         await List(apiUri, listRestResources, cancellationToken)
-                .ForEachParallel(async diagnosticName => await Export(apiDirectory, apiUri, diagnosticName, getRestResource, logger, cancellationToken),
+                .ForEachParallel(async diagnosticName => await Export(apiDirectory, apiUri, diagnosticName, getRestResource, logger, valuesToReplaceWithPlaceholders, cancellationToken),
                                  cancellationToken);
     }
 
@@ -24,7 +25,7 @@ internal static class ApiDiagnostic
                                     .Select(name => new ApiDiagnosticName(name));
     }
 
-    private static async ValueTask Export(ApiDirectory apiDirectory, ApiUri apiUri, ApiDiagnosticName apiDiagnosticName, GetRestResource getRestResource, ILogger logger, CancellationToken cancellationToken)
+    private static async ValueTask Export(ApiDirectory apiDirectory, ApiUri apiUri, ApiDiagnosticName apiDiagnosticName, GetRestResource getRestResource, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         var apiDiagnosticsDirectory = new ApiDiagnosticsDirectory(apiDirectory);
         var apiDiagnosticDirectory = new ApiDiagnosticDirectory(apiDiagnosticName, apiDiagnosticsDirectory);
@@ -32,10 +33,10 @@ internal static class ApiDiagnostic
         var apiDiagnosticsUri = new ApiDiagnosticsUri(apiUri);
         var apiDiagnosticUri = new ApiDiagnosticUri(apiDiagnosticName, apiDiagnosticsUri);
 
-        await ExportInformationFile(apiDiagnosticDirectory, apiDiagnosticUri, apiDiagnosticName, getRestResource, logger, cancellationToken);
+        await ExportInformationFile(apiDiagnosticDirectory, apiDiagnosticUri, apiDiagnosticName, getRestResource, logger, valuesToReplaceWithPlaceholders, cancellationToken);
     }
 
-    private static async ValueTask ExportInformationFile(ApiDiagnosticDirectory apiDiagnosticDirectory, ApiDiagnosticUri apiDiagnosticUri, ApiDiagnosticName apiDiagnosticName, GetRestResource getRestResource, ILogger logger, CancellationToken cancellationToken)
+    private static async ValueTask ExportInformationFile(ApiDiagnosticDirectory apiDiagnosticDirectory, ApiDiagnosticUri apiDiagnosticUri, ApiDiagnosticName apiDiagnosticName, GetRestResource getRestResource, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         var apiDiagnosticInformationFile = new ApiDiagnosticInformationFile(apiDiagnosticDirectory);
 
@@ -43,7 +44,16 @@ internal static class ApiDiagnostic
         var apiDiagnosticModel = ApiDiagnosticModel.Deserialize(apiDiagnosticName, responseJson);
         var contentJson = apiDiagnosticModel.Serialize();
 
+        var contentJsonTxt = contentJson.ToJsonString();
+        if (valuesToReplaceWithPlaceholders != null)
+        {
+            foreach (var urlsToReplaceWithPlaceholder in valuesToReplaceWithPlaceholders)
+            {
+                contentJsonTxt = contentJsonTxt.Replace(urlsToReplaceWithPlaceholder.Value, urlsToReplaceWithPlaceholder.Placeholder);
+            }
+        }
+        
         logger.LogInformation("Writing API diagnostic information file {filePath}...", apiDiagnosticInformationFile.Path);
-        await apiDiagnosticInformationFile.OverwriteWithJson(contentJson, cancellationToken);
+        await apiDiagnosticInformationFile.OverwriteWithJson(JsonNode.Parse(contentJsonTxt), cancellationToken);
     }
 }
