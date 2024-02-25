@@ -9,10 +9,10 @@ namespace extractor;
 
 internal static class ServicePolicy
 {
-    public static async ValueTask ExportAll(ServiceUri serviceUri, ServiceDirectory serviceDirectory, ListRestResources listRestResources, GetRestResource getRestResource, ILogger logger, CancellationToken cancellationToken)
+    public static async ValueTask ExportAll(ServiceUri serviceUri, ServiceDirectory serviceDirectory, ListRestResources listRestResources, GetRestResource getRestResource, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         await List(serviceUri, listRestResources, cancellationToken)
-                .ForEachParallel(async policyName => await Export(serviceDirectory, serviceUri, policyName, getRestResource, logger, cancellationToken),
+                .ForEachParallel(async policyName => await Export(serviceDirectory, serviceUri, policyName, getRestResource, logger, valuesToReplaceWithPlaceholders, cancellationToken),
                                  cancellationToken);
     }
 
@@ -24,7 +24,7 @@ internal static class ServicePolicy
                                 .Select(name => new ServicePolicyName(name));
     }
 
-    private static async ValueTask Export(ServiceDirectory serviceDirectory, ServiceUri serviceUri, ServicePolicyName policyName, GetRestResource getRestResource, ILogger logger, CancellationToken cancellationToken)
+    private static async ValueTask Export(ServiceDirectory serviceDirectory, ServiceUri serviceUri, ServicePolicyName policyName, GetRestResource getRestResource, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
         var policyFile = new ServicePolicyFile(policyName, serviceDirectory);
 
@@ -34,6 +34,14 @@ internal static class ServicePolicy
         var policyContent = responseJson.GetJsonObjectProperty("properties")
                                         .GetStringProperty("value");
 
+        if (valuesToReplaceWithPlaceholders != null)
+        {
+            foreach (var urlsToReplaceWithPlaceholder in valuesToReplaceWithPlaceholders)
+            {
+                policyContent = policyContent.Replace(urlsToReplaceWithPlaceholder.Value, urlsToReplaceWithPlaceholder.Placeholder);
+            }
+        }
+        
         logger.LogInformation("Writing service policy file {filePath}...", policyFile.Path);
         await policyFile.OverwriteWithText(policyContent, cancellationToken);
     }

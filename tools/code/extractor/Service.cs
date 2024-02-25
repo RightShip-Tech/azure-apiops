@@ -56,7 +56,7 @@ internal static class Service
         await PolicyFragment.ExportAll(serviceDirectory, serviceUri, policyFragmentNamesToExport, listRestResources, getRestResource, logger, cancellationToken);
 
         logger.LogInformation("Exporting service policies...");
-        await ServicePolicy.ExportAll(serviceUri, serviceDirectory, listRestResources, getRestResource, logger, cancellationToken);
+        await ServicePolicy.ExportAll(serviceUri, serviceDirectory, listRestResources, getRestResource, logger, valuesToReplaceWithPlaceholders, cancellationToken);
 
         logger.LogInformation("Exporting apis...");
         await Api.ExportAll(serviceDirectory, serviceUri, defaultSpecification, apiNamesToExport, listRestResources, getRestResource, downloadResource, logger, valuesToReplaceWithPlaceholders, cancellationToken);
