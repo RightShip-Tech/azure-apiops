@@ -76,7 +76,7 @@ internal static class Api
         await ExportInformationFile(apiModel, apiDirectory, logger, valuesToReplaceWithPlaceholders, cancellationToken);
         await ExportSpecification(apiModel, apiDirectory, apiUri, defaultSpecification, getRestResource, downloadResource, logger, valuesToReplaceWithPlaceholders, cancellationToken);
         await ExportTags(apiDirectory, apiUri, listRestResources, logger, cancellationToken);
-        await ExportPolicies(apiDirectory, apiUri, listRestResources, getRestResource, logger, cancellationToken);
+        await ExportPolicies(apiDirectory, apiUri, listRestResources, getRestResource, logger, valuesToReplaceWithPlaceholders, cancellationToken);
         await ExportDiagnostics(apiDirectory, apiUri, listRestResources, getRestResource, logger, valuesToReplaceWithPlaceholders, cancellationToken);
         await ExportOperations(apiDirectory, apiUri, listRestResources, getRestResource, logger, cancellationToken);
     }
@@ -236,9 +236,9 @@ internal static class Api
         await ApiDiagnostic.ExportAll(apiUri, apiDirectory, listRestResources, getRestResource, logger, valuesToReplaceWithPlaceholders, cancellationToken);
     }
 
-    private static async ValueTask ExportPolicies(ApiDirectory apiDirectory, ApiUri apiUri, ListRestResources listRestResources, GetRestResource getRestResource, ILogger logger, CancellationToken cancellationToken)
+    private static async ValueTask ExportPolicies(ApiDirectory apiDirectory, ApiUri apiUri, ListRestResources listRestResources, GetRestResource getRestResource, ILogger logger, IEnumerable<PlaceholderValueModel>? valuesToReplaceWithPlaceholders, CancellationToken cancellationToken)
     {
-        await ApiPolicy.ExportAll(apiDirectory, apiUri, listRestResources, getRestResource, logger, cancellationToken);
+        await ApiPolicy.ExportAll(apiDirectory, apiUri, listRestResources, getRestResource, logger, valuesToReplaceWithPlaceholders, cancellationToken);
     }
 
     private static async ValueTask ExportOperations(ApiDirectory apiDirectory, ApiUri apiUri, ListRestResources listRestResources, GetRestResource getRestResource, ILogger logger, CancellationToken cancellationToken)
